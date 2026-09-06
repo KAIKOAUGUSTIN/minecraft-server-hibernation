@@ -15,7 +15,8 @@ import (
 )
 
 const (
-	// maxPacketLen is the maximum length (in bytes) of the data of a client packet that msh accepts.
+	// maxPacketLen is the maximum length (in bytes) of a client packet that msh accepts
+	// (packet length VarInt included).
 	// handshake / login start / ping packets are a few dozen bytes long: this limit is very generous
 	// and prevents a malicious client from making msh allocate a huge buffer
 	// by declaring an enormous packet length
@@ -315,19 +316,19 @@ func getClientPacket(clientConn net.Conn) ([]byte, *errco.MshLog) {
 		return nil, logMsh.AddTrace()
 	}
 
-	// check packet length before allocating memory for it
+	// check the size of the whole allocation (VarInt header + packet data) before
+	// allocating memory for it: bounding packetLen alone would leave the sum
+	// headerLen+packetLen free to overflow.
+	// headerLen is never negative (it is a slice length), so maxPacketLen-headerLen is
+	// always <= maxPacketLen and headerLen+packetLen can neither overflow nor exceed maxPacketLen.
 	// (packetLen < 0 catches a 5 bytes VarInt overflowing int on 32 bit systems)
 	headerLen := len(packetLenByt)
-	if headerLen < 0 || headerLen > 5 {
-		return nil, errco.NewLog(errco.TYPE_ERR, errco.LVL_3, errco.ERROR_CLIENT_SOCKET_READ, "client declared an invalid VarInt header length (%d)", headerLen)
-	}
-	if packetLen < 0 || packetLen > maxPacketLen || packetLen > maxPacketLen-headerLen {
+	if packetLen < 0 || packetLen > maxPacketLen-headerLen {
 		return nil, errco.NewLog(errco.TYPE_ERR, errco.LVL_3, errco.ERROR_CLIENT_SOCKET_READ, "client declared a packet length out of range (%d)", packetLen)
 	}
 
 	// read packet data (keep reading until the whole packet has been received)
-	totalLen := headerLen + packetLen
-	packet := make([]byte, totalLen)
+	packet := make([]byte, headerLen+packetLen)
 	copy(packet, packetLenByt)
 	_, err := io.ReadFull(clientConn, packet[headerLen:])
 	if err != nil {

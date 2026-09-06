@@ -468,6 +468,14 @@ func Test_getClientPacket(t *testing.T) {
 			0,
 			nil,
 		},
+		{
+			// maxPacketLen bounds the whole allocation (packet length VarInt included):
+			// the VarInt header leaves less than maxPacketLen bytes for the packet data
+			"declared packet length leaving no room for the length VarInt",
+			[][]byte{varInt(maxPacketLen)},
+			0,
+			nil,
+		},
 	}
 
 	// open the listener before dialing, to avoid a race between listener and client
