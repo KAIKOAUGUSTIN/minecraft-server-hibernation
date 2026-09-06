@@ -327,8 +327,11 @@ func getClientPacket(clientConn net.Conn) ([]byte, *errco.MshLog) {
 		return nil, errco.NewLog(errco.TYPE_ERR, errco.LVL_3, errco.ERROR_CLIENT_SOCKET_READ, "client declared a packet length out of range (%d)", packetLen)
 	}
 
+	// safe after the check above: packetLen <= maxPacketLen-headerLen
+	packetSize := headerLen + packetLen
+
 	// read packet data (keep reading until the whole packet has been received)
-	packet := make([]byte, headerLen+packetLen)
+	packet := make([]byte, packetSize)
 	copy(packet, packetLenByt)
 	_, err := io.ReadFull(clientConn, packet[headerLen:])
 	if err != nil {
