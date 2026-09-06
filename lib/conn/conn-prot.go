@@ -317,14 +317,19 @@ func getClientPacket(clientConn net.Conn) ([]byte, *errco.MshLog) {
 
 	// check packet length before allocating memory for it
 	// (packetLen < 0 catches a 5 bytes VarInt overflowing int on 32 bit systems)
-	if packetLen < 0 || packetLen > maxPacketLen {
+	headerLen := len(packetLenByt)
+	if headerLen < 0 || headerLen > 5 {
+		return nil, errco.NewLog(errco.TYPE_ERR, errco.LVL_3, errco.ERROR_CLIENT_SOCKET_READ, "client declared an invalid VarInt header length (%d)", headerLen)
+	}
+	if packetLen < 0 || packetLen > maxPacketLen || packetLen > maxPacketLen-headerLen {
 		return nil, errco.NewLog(errco.TYPE_ERR, errco.LVL_3, errco.ERROR_CLIENT_SOCKET_READ, "client declared a packet length out of range (%d)", packetLen)
 	}
 
 	// read packet data (keep reading until the whole packet has been received)
-	packet := make([]byte, len(packetLenByt)+packetLen)
+	totalLen := headerLen + packetLen
+	packet := make([]byte, totalLen)
 	copy(packet, packetLenByt)
-	_, err := io.ReadFull(clientConn, packet[len(packetLenByt):])
+	_, err := io.ReadFull(clientConn, packet[headerLen:])
 	if err != nil {
 		return nil, errco.NewLog(errco.TYPE_ERR, errco.LVL_3, errco.ERROR_CLIENT_SOCKET_READ, err.Error())
 	}
